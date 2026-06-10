@@ -780,6 +780,76 @@ function listen(id, eventName, handler) {
 }
 
 // ═══════════════════════════════════════════════
+
+let activeMaskTool = 'adjust';
+let isDrawingMaskLasso = false;
+let currentMaskLassoPath = [];
+let _aspectRatio = 1;
+// Delay querying the container until after the DOM elements exist, or just use the document query directly when needed.
+// However, the script is at the bottom of the body so elements exist.
+let maskContainer;
+window.addEventListener('DOMContentLoaded', () => {
+    maskContainer = document.getElementById('mask-canvas-container');
+    if (maskContainer) {
+        maskContainer.addEventListener('mousedown', onMaskLassoStart);
+        maskContainer.addEventListener('mousemove', onMaskLassoMove);
+        maskContainer.addEventListener('touchstart', onMaskLassoStart, {passive: false});
+        maskContainer.addEventListener('touchmove', onMaskLassoMove, {passive: false});
+    }
+});
+
+function initDefaultCropBox() {
+  const ir = imgDisplayRect();
+  if (!ir || !ir.w || !ir.h) return;
+
+  const ratioChip = document.querySelector('.aspect-chip.active');
+  let aspect = null;
+  if (ratioChip && ratioChip.dataset.ratio !== 'free') {
+    const parts = ratioChip.dataset.ratio.split(':');
+    aspect = +parts[0] / +parts[1];
+  }
+
+  let bw = ir.w * 0.8;
+  let bh = ir.h * 0.8;
+
+  if (aspect) {
+    if (bw / bh > aspect) {
+        bw = bh * aspect;
+    } else {
+        bh = bw / aspect;
+    }
+  }
+
+  cropState.box = {
+    x: ir.left + (ir.w - bw) / 2,
+    y: ir.top + (ir.h - bh) / 2,
+    w: bw,
+    h: bh
+  };
+
+  renderCropBox();
+}
+
+function setupExport() {
+  const sizeChips = document.getElementById('size-preset-chips');
+  if (sizeChips) {
+    if (state.mode === 'photo') {
+      sizeChips.innerHTML = `
+        <div class="chip" onclick="document.getElementById('out-w').value=600; document.getElementById('out-h').value=600; document.getElementById('out-unit').value='px'; document.getElementById('out-unit').dispatchEvent(new Event('change'));">600x600 px</div>
+        <div class="chip" onclick="document.getElementById('out-w').value=35; document.getElementById('out-h').value=45; document.getElementById('out-unit').value='mm'; document.getElementById('out-unit').dispatchEvent(new Event('change'));">35x45 mm</div>
+        <div class="chip" onclick="document.getElementById('out-w').value=2; document.getElementById('out-h').value=2; document.getElementById('out-unit').value='inch'; document.getElementById('out-unit').dispatchEvent(new Event('change'));">2x2 inch</div>
+      `;
+    } else {
+      sizeChips.innerHTML = `
+        <div class="chip" onclick="document.getElementById('out-w').value=400; document.getElementById('out-h').value=200; document.getElementById('out-unit').value='px'; document.getElementById('out-unit').dispatchEvent(new Event('change'));">400x200 px</div>
+        <div class="chip" onclick="document.getElementById('out-w').value=800; document.getElementById('out-h').value=400; document.getElementById('out-unit').value='px'; document.getElementById('out-unit').dispatchEvent(new Event('change'));">800x400 px</div>
+        <div class="chip" onclick="document.getElementById('out-w').value=1200; document.getElementById('out-h').value=600; document.getElementById('out-unit').value='px'; document.getElementById('out-unit').dispatchEvent(new Event('change'));">1200x600 px</div>
+      `;
+    }
+  }
+  refreshExportPreview();
+}
+
 //  NAVIGATION
 // ═══════════════════════════════════════════════
 let currentStage = 0;
@@ -1674,15 +1744,10 @@ listen('btn-mask-undo-erase', 'click', () => {
   }
 });
 
-if (maskContainer) {
-  maskContainer.addEventListener('mousedown', onMaskLassoStart);
-  maskContainer.addEventListener('mousemove', onMaskLassoMove);
+
   window.addEventListener('mouseup', onMaskLassoEnd);
-  
-  maskContainer.addEventListener('touchstart', onMaskLassoStart, {passive: false});
-  maskContainer.addEventListener('touchmove', onMaskLassoMove, {passive: false});
   window.addEventListener('touchend', onMaskLassoEnd);
-}
+
 
 function onMaskLassoStart(e) {
   if (activeMaskTool !== 'erase') return;
