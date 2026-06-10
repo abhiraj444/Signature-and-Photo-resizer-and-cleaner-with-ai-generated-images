@@ -1,0 +1,2390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SignVec — Signature & Passport Photo Processor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght=400;500&family=DM+Sans:ital,wght=0,300;0,400;0,500;0,600;1,300&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #0f0e0d;
+    --paper: #f7f5f0;
+    --paper2: #eceae3;
+    --accent: #2563eb;
+    --accent2: #1d4ed8;
+    --stroke: #d0cec7;
+    --muted: #7c7b78;
+    --success: #16a34a;
+    --danger: #dc2626;
+    --panel: #ffffff;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+    --radius: 12px;
+    --font-main: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-main);
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--stroke);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo {
+    font-family: var(--font-mono);
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--accent); }
+  .step-pills {
+    display: flex; gap: 6px;
+  }
+  .pill {
+    font-size: 11px; font-weight: 500;
+    padding: 4px 10px; border-radius: 99px;
+    border: 1px solid var(--stroke);
+    color: var(--muted);
+    cursor: default;
+    transition: all .2s;
+    font-family: var(--font-mono);
+  }
+  .pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .pill.done { background: var(--paper2); color: var(--ink); border-color: var(--stroke); }
+
+  /* ── MODE SELECTOR ── */
+  .mode-selector {
+    display: flex; gap: 8px; margin-bottom: 20px;
+    background: var(--paper2); padding: 4px; border-radius: var(--radius);
+  }
+  .mode-btn {
+    flex: 1; padding: 10px; border-radius: 8px; border: none;
+    font-family: var(--font-main); font-weight: 600; font-size: 13px;
+    cursor: pointer; background: transparent; color: var(--muted);
+    transition: all .2s;
+  }
+  .mode-btn.active {
+    background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  /* ── MAIN ── */
+  main { max-width: 860px; margin: 0 auto; padding: 28px 16px 60px; }
+
+  /* ── PANELS ── */
+  .stage { display: none; }
+  .stage.visible { display: block; }
+
+  .card {
+    background: var(--panel);
+    border-radius: var(--radius);
+    border: 1px solid var(--stroke);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--stroke);
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  }
+  .card-header h2 { font-size: 16px; font-weight: 600; }
+  .card-header p { font-size: 13px; color: var(--muted); }
+  .card-body { padding: 22px; }
+
+  /* ── UPLOAD ── */
+  #drop-zone {
+    border: 2px dashed var(--stroke);
+    border-radius: 10px;
+    padding: 52px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: var(--paper);
+  }
+  #drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--accent);
+    background: #eff6ff;
+  }
+  #drop-zone .icon { font-size: 40px; margin-bottom: 12px; display: block; }
+  #drop-zone h3 { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+  #drop-zone p { font-size: 13px; color: var(--muted); }
+  #file-input { display: none; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 20px; border-radius: 8px;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer; border: none; outline: none;
+    transition: all .15s;
+    font-family: var(--font-main);
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-secondary { background: var(--paper2); color: var(--ink); border: 1px solid var(--stroke); }
+  .btn-secondary:hover { background: var(--stroke); }
+  .btn-ghost { background: transparent; color: var(--accent); }
+  .btn-ghost:hover { background: #eff6ff; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+
+  /* ── CROP ── */
+  #crop-wrapper {
+    position: relative;
+    overflow: hidden;
+    background: var(--paper2);
+    border-radius: 8px;
+    user-select: none;
+    touch-action: none;
+    max-height: 60vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #crop-img {
+    display: block;
+    max-width: 100%; max-height: 60vh;
+    pointer-events: none;
+  }
+  #crop-box {
+    position: absolute;
+    border: 2px solid var(--accent);
+    background: rgba(37,99,235,.08);
+    cursor: move;
+    display: none;
+    touch-action: none;
+  }
+  #crop-box::before {
+    content: '';
+    position: absolute; inset: -1px;
+    border: 1px dashed rgba(37,99,235,.5);
+    pointer-events: none;
+  }
+
+  /* 8-point interactive resizing handles */
+  .crop-handle {
+    position: absolute; width: 12px; height: 12px;
+    background: var(--accent); border-radius: 50%;
+    border: 2px solid #fff;
+    z-index: 5;
+  }
+  .crop-handle.tl { top:-6px; left:-6px; cursor:nwse-resize; }
+  .crop-handle.tr { top:-6px; right:-6px; cursor:nesw-resize; }
+  .crop-handle.bl { bottom:-6px; left:-6px; cursor:nesw-resize; }
+  .crop-handle.br { bottom:-6px; right:-6px; cursor:nwse-resize; }
+  .crop-handle.t { top:-6px; left:calc(50% - 6px); cursor:ns-resize; }
+  .crop-handle.b { bottom:-6px; left:calc(50% - 6px); cursor:ns-resize; }
+  .crop-handle.l { left:-6px; top:calc(50% - 6px); cursor:ew-resize; }
+  .crop-handle.r { right:-6px; top:calc(50% - 6px); cursor:ew-resize; }
+
+  .hint-text { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  /* ── THRESHOLD STAGE ── */
+  #threshold-canvas-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .canvas-label {
+    font-size: 11px; font-weight: 500; letter-spacing: .5px;
+    text-transform: uppercase; color: var(--muted);
+    font-family: var(--font-mono);
+    margin-bottom: 6px;
+  }
+  
+  /* Mask Container absolute overlays for clean erasing */
+  #mask-canvas-container {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    user-select: none;
+    touch-action: none;
+  }
+  #canvas-mask {
+    width: 100%;
+    display: block;
+    background: transparent;
+  }
+  #mask-lasso-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  canvas { border-radius: 8px; width: 100%; border: 1px solid var(--stroke); display: block; }
+
+  /* ── SLIDERS ── */
+  .control-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px;
+  }
+  .control-row label {
+    font-size: 13px; font-weight: 500; min-width: 130px;
+    flex-shrink: 0;
+  }
+  input[type=range] {
+    flex: 1; height: 4px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .val-badge {
+    font-family: var(--font-mono);
+    font-size: 12px; background: var(--paper2);
+    padding: 2px 8px; border-radius: 5px;
+    min-width: 40px; text-align: center;
+  }
+
+  /* ── VECTOR OUTPUT ── */
+  #svg-preview-wrap {
+    background: repeating-conic-gradient(var(--paper2) 0% 25%, white 0% 50%) 0 0 / 20px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--stroke);
+    padding: 20px;
+    min-height: 200px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  #svg-preview-wrap svg { max-width: 100%; max-height: 60vh; }
+
+  /* ── FORMAT SELECTOR ── */
+  .format-grid {
+    display: grid; grid-template-columns: repeat(3,1fr); gap: 10px;
+    margin-bottom: 18px;
+  }
+  .format-card {
+    border: 1px solid var(--stroke); border-radius: 8px;
+    padding: 12px; text-align: center; cursor: pointer;
+    transition: all .15s;
+  }
+  .format-card:hover { border-color: var(--accent); background: #eff6ff; }
+  .format-card.selected { border-color: var(--accent); background: #eff6ff; }
+  .format-card .fmt-name { font-size: 13px; font-weight: 600; font-family: var(--font-mono); }
+  .format-card .fmt-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* custom size row */
+  .size-inputs { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .size-inputs input[type=number] {
+    width: 90px; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--stroke); font-size: 14px;
+    font-family: var(--font-main); background: var(--paper);
+  }
+  .size-inputs input[type=number]:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .size-inputs span { color: var(--muted); font-size: 13px; }
+
+  select {
+    padding: 8px 12px; border-radius: 8px;
+    border: 1px solid var(--stroke); font-size: 14px;
+    font-family: var(--font-main); background: var(--paper);
+    cursor: pointer;
+  }
+  select:focus { outline: 2px solid var(--accent); }
+
+  /* ── PRESET SIZES ── */
+  .preset-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .chip {
+    padding: 5px 12px; border-radius: 99px;
+    font-size: 12px; font-weight: 500;
+    border: 1px solid var(--stroke);
+    background: var(--paper2);
+    cursor: pointer;
+    transition: all .15s;
+    font-family: var(--font-mono);
+  }
+  .chip:hover { border-color: var(--accent); background: #eff6ff; color: var(--accent); }
+  .chip.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+
+  /* ── SPINNER ── */
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--stroke);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px);
+    background: var(--ink); color: #fff;
+    padding: 10px 18px; border-radius: 8px;
+    font-size: 13px; font-weight: 500;
+    z-index: 999; transition: transform .3s;
+    pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── MOBILE ── */
+  @media(max-width:480px){
+    header { padding: 12px 14px; }
+    .step-pills { display: none; }
+    main { padding: 16px 10px 60px; }
+    .card-body { padding: 14px; }
+    .format-grid { grid-template-columns: 1fr 1fr; }
+    .control-row { flex-wrap: wrap; }
+    .control-row label { min-width: unset; width: 100%; }
+  }
+
+  /* ── SECTION DIVIDER ── */
+  .section-sep { height: 1px; background: var(--stroke); margin: 18px 0; }
+
+  /* ── INFO BOX ── */
+  .info-box {
+    background: #eff6ff; border: 1px solid #bfdbfe;
+    border-radius: 8px; padding: 12px 14px;
+    font-size: 13px; color: #1e40af;
+    margin-bottom: 16px;
+  }
+
+  /* ── TOGGLE SWITCH ── */
+  .toggle-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .toggle-row label { font-size: 13px; }
+  .toggle {
+    position: relative; width: 36px; height: 20px;
+    display: inline-block;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; inset: 0;
+    background: var(--stroke); border-radius: 99px;
+    cursor: pointer; transition: .2s;
+  }
+  .toggle-slider::before {
+    content: ''; position: absolute;
+    width: 14px; height: 14px;
+    left: 3px; top: 3px;
+    background: #fff; border-radius: 50%;
+    transition: .2s;
+  }
+  .toggle input:checked + .toggle-slider { background: var(--accent); }
+  .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Sign<span>Vec</span></div>
+  <div class="step-pills">
+    <div class="pill active" id="pill-0">Upload</div>
+    <div class="pill" id="pill-1">Crop</div>
+    <div class="pill" id="pill-2">Clean</div>
+    <div class="pill" id="pill-3">Vector</div>
+    <div class="pill" id="pill-4">Export</div>
+  </div>
+  <button type="button" class="btn btn-secondary" id="btn-fresh-reset" style="padding: 6px 12px; font-size: 12px; display: none;">🔄 Start Fresh</button>
+</header>
+
+<main>
+
+<!-- STAGE 0: UPLOAD -->
+<div class="stage visible" id="stage-0">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2>Upload Image</h2>
+        <p>Choose an operational mode and upload your image</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <!-- Dual Mode selector with safe button attributes -->
+      <div class="mode-selector">
+        <button type="button" class="mode-btn active" id="btn-mode-sig">✍️ Signature Mode</button>
+        <button type="button" class="mode-btn" id="btn-mode-photo">👤 Portrait/Photo Mode</button>
+      </div>
+
+      <div id="drop-zone">
+        <span class="icon" id="drop-icon">✍️</span>
+        <h3 id="drop-title">Drop your signature here</h3>
+        <p>or tap to browse from your device</p>
+      </div>
+      <input type="file" id="file-input" accept="image/*" />
+    </div>
+  </div>
+</div>
+
+<!-- STAGE 1: CROP -->
+<div class="stage" id="stage-1">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2>Crop & Straighten Your Image</h2>
+        <p>Adjust rotation to level the image, then frame the target area</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <!-- Straighten Slider Control with Micro-Stepping Controls -->
+      <div class="control-row" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <label style="min-width: 100px; font-weight: 500;">Straighten</label>
+        <div style="display: flex; gap: 6px; align-items: center; flex: 1; min-width: 200px;">
+          <button type="button" class="btn btn-secondary" id="btn-rot-left" style="padding: 6px 12px; font-size: 14px;">↺</button>
+          <input type="range" id="sl-rotate" min="-180" max="180" value="0" style="flex: 1;" />
+          <button type="button" class="btn btn-secondary" id="btn-rot-right" style="padding: 6px 12px; font-size: 14px;">↻</button>
+        </div>
+        <button type="button" class="btn btn-secondary" id="btn-rot-90" style="padding: 6px 12px; font-size: 13px; font-weight:600;">↻ 90°</button>
+        <span class="val-badge" id="val-rotate" style="min-width: 50px;">0°</span>
+      </div>
+
+      <div id="aspect-presets-container" style="display: none; margin-bottom: 12px;">
+        <div class="canvas-label">Aspect Ratio Presets</div>
+        <div class="preset-chips">
+          <div class="chip aspect-chip active" data-ratio="free">Freeform</div>
+          <div class="chip aspect-chip" data-ratio="1:1">1:1 (Square)</div>
+          <div class="chip aspect-chip" data-ratio="3.5:4.5">3.5:4.5 (Passport)</div>
+          <div class="chip aspect-chip" data-ratio="3:4">3:4 (Portrait)</div>
+        </div>
+      </div>
+
+      <div id="crop-wrapper">
+        <img id="crop-img" />
+        <div id="crop-box">
+          <div class="crop-handle tl" data-handle="tl"></div>
+          <div class="crop-handle tr" data-handle="tr"></div>
+          <div class="crop-handle bl" data-handle="bl"></div>
+          <div class="crop-handle br" data-handle="br"></div>
+          <div class="crop-handle t" data-handle="t"></div>
+          <div class="crop-handle b" data-handle="b"></div>
+          <div class="crop-handle l" data-handle="l"></div>
+          <div class="crop-handle r" data-handle="r"></div>
+        </div>
+      </div>
+      <p class="hint-text" id="crop-hint">Tip: Make the selection box as tight as possible around your signature.</p>
+      
+      <!-- AI Attire Generator Lobby on Stage 1 Crop -->
+      <div id="ai-generator-section" style="display:none; margin-top:18px; border-top: 1px solid var(--stroke); padding-top: 18px;">
+        <div class="canvas-label">AI Passport Attire Generator</div>
+        <div class="info-box">🔮 Convert your photo into a 3×3 grid of 9 professional passport photos with varied studio attires using Google Gemini.</div>
+        
+        <!-- Interactive Choice Toggle -->
+        <div class="toggle-row" style="margin-bottom: 12px;">
+          <label class="toggle">
+            <input type="checkbox" id="toggle-gemini-use-crop" checked />
+            <span class="toggle-slider"></span>
+          </label>
+          <label for="toggle-gemini-use-crop" style="font-weight: 500;">Use Cropped Selection (recommended for close-ups)</label>
+        </div>
+
+        <button type="button" class="btn btn-primary" id="btn-gemini-generate" style="background:#8b5cf6; width:100%; justify-content:center; box-shadow: 0 4px 6px -1px rgba(139, 92, 246, 0.2);">🔮 Generate Professional Grid via Gemini</button>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btn-crop-apply">Use Selection →</button>
+        <button type="button" class="btn btn-secondary" id="btn-crop-skip">Use Full Image</button>
+        <button type="button" class="btn btn-ghost btn-back-to-0">← Back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STAGE 2: CLEAN / THRESHOLD & ERASER -->
+<div class="stage" id="stage-2">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2>Remove Background & Erase Smudges</h2>
+        <p>Isolate the signature, then circle smudges or dust to remove them cleanly</p>
+      </div>
+    </div>
+    <div class="card-body">
+      
+      <!-- Erase & Lasso Tools UI above canvases -->
+      <div class="toggle-row" style="justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary active" id="btn-mask-tool-adjust" style="padding: 6px 12px; font-size: 13px;">👆 Slider Tuning</button>
+          <button type="button" class="btn btn-secondary" id="btn-mask-tool-erase" style="padding: 6px 12px; font-size: 13px; border-color: var(--danger); color: var(--danger);">🧹 Circle to Erase</button>
+        </div>
+        <button type="button" class="btn btn-ghost" id="btn-mask-undo-erase" style="padding: 6px 12px; font-size: 13px;" disabled>🔄 Undo Erase</button>
+      </div>
+
+      <!-- Redesigned stacked display: small original reference at top, prominent workspace below -->
+      <div id="threshold-canvas-wrap" style="display: flex; flex-direction: column; gap: 16px;">
+        <div style="max-width: 300px; margin: 0 auto; width: 100%;">
+          <div class="canvas-label" style="text-align: center;">Original Reference</div>
+          <canvas id="canvas-orig" style="max-height: 100px; object-fit: contain;"></canvas>
+        </div>
+        
+        <div style="width: 100%;">
+          <div class="canvas-label" style="text-align: center; margin-bottom: 8px;">Signature Mask Workspace (Circle to Erase Active Here)</div>
+          <!-- Canvas Overlay Workspace positioned correctly with repeating backing grid styling -->
+          <div id="mask-canvas-container" style="background: repeating-conic-gradient(var(--paper2) 0% 25%, white 0% 50%) 0 0 / 20px 20px; border-radius: 8px; border: 1px solid var(--stroke); box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);">
+            <canvas id="canvas-mask"></canvas>
+            <canvas id="mask-lasso-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+      
+      <div class="section-sep"></div>
+
+      <div class="control-row">
+        <label>Sensitivity</label>
+        <input type="range" id="sl-threshold" min="1" max="150" value="40" step="1" />
+        <span class="val-badge" id="val-threshold">40</span>
+      </div>
+      <div class="control-row">
+        <label>Noise Removal</label>
+        <input type="range" id="sl-noise" min="0" max="30" value="2" step="1" />
+        <span class="val-badge" id="val-noise">2</span>
+      </div>
+      <div class="control-row">
+        <label>Edge Soften</label>
+        <input type="range" id="sl-blur" min="0" max="15" value="1" step="0.5" />
+        <span class="val-badge" id="val-blur">1</span>
+      </div>
+
+      <div class="section-sep"></div>
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="toggle-invert" />
+          <span class="toggle-slider"></span>
+        </label>
+        <label for="toggle-invert">Invert (dark paper / light ink)</label>
+      </div>
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="toggle-contrast" checked />
+          <span class="toggle-slider"></span>
+        </label>
+        <label for="toggle-contrast">Auto-contrast boost before thresholding</label>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btn-to-vector">Vectorize →</button>
+        <button type="button" class="btn btn-ghost" id="btn-back-1">← Recrop</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STAGE 3: VECTOR -->
+<div class="stage" id="stage-3">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2>Vector Preview</h2>
+        <p>Review and edit path curve smooth styles</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="svg-preview-wrap">
+        <div id="svg-container" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; min-height: 250px;">
+          <div class="spinner" id="vec-spinner"></div>
+        </div>
+      </div>
+      <div class="section-sep"></div>
+      <div class="control-row">
+        <label>Path Smoothing</label>
+        <input type="range" id="sl-smooth" min="0" max="15" value="3" step="1" />
+        <span class="val-badge" id="val-smooth">3</span>
+      </div>
+      <div class="control-row">
+        <label>Stroke Weight</label>
+        <!-- Retuned stroke range to act like pencil or fine pen weights -->
+        <input type="range" id="sl-weight" min="0.1" max="5" value="1" step="0.1" />
+        <span class="val-badge" id="val-weight">1</span>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btn-to-export">Set Size & Export →</button>
+        <button type="button" class="btn btn-ghost" id="btn-back-2">← Adjust Mask</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STAGE 4: EXPORT -->
+<div class="stage" id="stage-4">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2>Export Setup</h2>
+        <p>Set exact target dimensions and configuration limits</p>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <div class="canvas-label" style="margin-bottom:10px">Output Format</div>
+      <div class="format-grid">
+        <div class="format-card selected" data-fmt="png">
+          <div class="fmt-name">PNG</div>
+          <div class="fmt-desc" id="fmt-desc-png">Transparent background</div>
+        </div>
+        <div class="format-card" data-fmt="jpg">
+          <div class="fmt-name">JPG</div>
+          <div class="fmt-desc">White background</div>
+        </div>
+        <div class="format-card" data-fmt="svg">
+          <div class="fmt-name">SVG</div>
+          <div class="fmt-desc">Scalable vector</div>
+        </div>
+      </div>
+
+      <div class="canvas-label" style="margin-bottom:8px">Preset Sizes</div>
+      <div class="preset-chips" id="size-preset-chips">
+        <!-- Preset choices dynamically written in JS depending on mode -->
+      </div>
+
+      <div class="size-inputs" style="margin-bottom:16px">
+        <input type="number" id="out-w" placeholder="Width" value="400" min="1" max="4000" />
+        <span>×</span>
+        <input type="number" id="out-h" placeholder="Height" value="200" min="1" max="4000" />
+        <select id="out-unit">
+          <option value="px">px</option>
+          <option value="mm">mm</option>
+          <option value="inch">inch</option>
+        </select>
+        <select id="out-dpi" style="display:none">
+          <option value="96">96 dpi</option>
+          <option value="150">150 dpi</option>
+          <option value="300" selected>300 dpi</option>
+        </select>
+      </div>
+
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="toggle-keepratio" checked />
+          <span class="toggle-slider"></span>
+        </label>
+        <label for="toggle-keepratio">Keep aspect ratio</label>
+      </div>
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="toggle-pad" />
+          <span class="toggle-slider"></span>
+        </label>
+        <label for="toggle-pad">Add padding (5%)</label>
+      </div>
+
+      <!-- FILE SIZE KB LIMIT MODULE -->
+      <div class="section-sep"></div>
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="toggle-kb-limit" />
+          <span class="toggle-slider"></span>
+        </label>
+        <label for="toggle-kb-limit" style="font-weight: 500;">Limit File Size (KB)</label>
+      </div>
+      <div class="size-inputs" id="kb-inputs-wrapper" style="display:none; margin-bottom:16px;">
+        <span style="font-size:13px; font-weight:500;">Range:</span>
+        <input type="number" id="kb-min" placeholder="Min KB" value="10" min="1" max="5000" />
+        <span>to</span>
+        <input type="number" id="kb-max" placeholder="Max KB" value="20" min="2" max="5000" />
+        <span>KB</span>
+      </div>
+
+      <div id="export-preview-wrap" style="margin:16px 0">
+        <div class="canvas-label" style="margin-bottom:6px">Preview at target size</div>
+        <canvas id="canvas-export" style="max-height:180px; width:100%; object-fit:contain;"></canvas>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btn-download">⬇ Download</button>
+        <button type="button" class="btn btn-secondary" id="btn-preview-refresh">Refresh Preview</button>
+        <button type="button" class="btn btn-ghost" id="btn-back-3">← Back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<!-- GEMINI API ACCESS TOKEN MODAL -->
+<div id="gemini-key-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; padding:16px; backdrop-filter: blur(4px);">
+  <div class="card" style="max-width:450px; width:100%; border-radius:12px; box-shadow: var(--shadow);">
+    <div class="card-header" style="padding:14px 20px;">
+      <h2>Enter Gemini API Key</h2>
+    </div>
+    <div class="card-body" style="padding:20px;">
+      <p style="font-size:13px; color:var(--muted); margin-bottom:12px; line-height:1.4;">To generate professional attire variations, please provide your Google AI Studio API Key. The key will be stored securely on your browser's local storage.</p>
+      <input type="password" id="gemini-api-key-input" placeholder="AIzaSy..." style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--stroke); margin-bottom:16px;" />
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" class="btn btn-secondary" id="btn-cancel-key">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-save-key" style="background:#8b5cf6;">Save & Generate</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GEMINI API GENERATION LOADING OVERLAY -->
+<div id="gemini-loading-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,14,13,0.85); z-index:1000; align-items:center; justify-content:center; flex-direction:column; padding:24px; color:#fff; text-align:center; backdrop-filter: blur(8px);">
+  <div class="spinner" style="width:50px; height:50px; border-width:4px; border-top-color:#8b5cf6; margin-bottom:16px;"></div>
+  <h3 style="font-size:18px; margin-bottom:8px; font-weight:600;">🔮 Generating Professional Attires...</h3>
+  <p style="font-size:13px; color:#ccc; max-width:340px; line-height:1.5;">Google Gemini is generating a 3×3 grid of 9 high-quality portrait photographs with varied business-casual attire. This usually takes 10 to 20 seconds. Please hold on...</p>
+</div>
+
+<!-- GEMINI API OUTPUT POPUP GRID PREVIEW -->
+<div id="gemini-result-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center; padding:16px; overflow-y:auto; backdrop-filter: blur(4px);">
+  <div class="card" style="max-width:650px; width:100%; border-radius:12px; margin-top:20px; margin-bottom:20px;">
+    <div class="card-header" style="padding:14px 20px;">
+      <h2>🔮 Generated AI Portrait Grid</h2>
+    </div>
+    <div class="card-body" style="padding:20px; text-align:center;">
+      <div class="info-box" style="text-align:left; line-height:1.4; margin-bottom:14px;">🎉 Grid generated successfully! Select a photo below or click "Crop from Grid" to isolate a specific portrait.</div>
+      <div style="margin:16px 0; border-radius:8px; overflow:hidden; border:1px solid var(--stroke);">
+        <img id="gemini-generated-img" style="width:100%; max-height:55vh; object-fit:contain; display:block;" />
+      </div>
+      <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+        <button type="button" class="btn btn-secondary" id="btn-download-grid-raw">⬇ Download Original Grid</button>
+        <button type="button" class="btn btn-primary" id="btn-crop-grid-photo" style="background:#8b5cf6;">✂ Crop a Photo from Grid</button>
+        <button type="button" class="btn btn-ghost" id="btn-close-result" style="color:var(--muted);">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+const state = {
+  mode: 'signature',        // 'signature' | 'photo'
+  originalImage: null,      // HTMLImageElement
+  croppedCanvas: null,      // canvas with cropped image
+  previewCanvas: null,      // downscaled fast-processing canvas for Stage 2 preview
+  maskCanvas: null,         // binary mask canvas (Signature Mode only)
+  svgString: null,          // generated SVG string (Signature Mode only)
+  fmt: 'png',
+  cropRect: null,           // {x,y,w,h} in image coords
+  contours: null,           // active marching squares contours
+  processedContours: [],    // simplified + smoothed vector contours
+  vectorBounds: null,       // tight bounds { minX, minY, cropW, cropH }
+  eraserPolygons: [],       // persistent smudge coordinates
+  eraserHistory: [],        // history of erased bounds for Undo
+  activeTool: 'pan',        // 'pan' | 'erase'
+  lastGeneratedGridBase64: null // Store base64 response from Gemini
+};
+
+// Defensive JS listener registration wrapper to prevent script breaks
+function listen(id, eventName, handler) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener(eventName, handler);
+  } else {
+    console.warn(`SignVec warning: Element with ID "${id}" was not resolved in DOM.`);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════
+let currentStage = 0;
+function goTo(n) {
+  document.querySelectorAll('.stage').forEach((s,i) => {
+    s.classList.toggle('visible', i === n);
+  });
+  document.querySelectorAll('.pill').forEach((p, i) => {
+    p.classList.remove('active','done');
+    if(i === n) p.classList.add('active');
+    if(i < n) p.classList.add('done');
+  });
+
+  // Adjust steps based on operational mode
+  if (state.mode === 'photo') {
+    const pill2 = document.getElementById('pill-2');
+    const pill3 = document.getElementById('pill-3');
+    if (pill2) pill2.style.display = 'none';
+    if (pill3) pill3.style.display = 'none';
+  } else {
+    const pill2 = document.getElementById('pill-2');
+    const pill3 = document.getElementById('pill-3');
+    if (pill2) pill2.style.display = 'block';
+    if (pill3) pill3.style.display = 'block';
+  }
+
+  // Toggle Global Start Fresh Button visibility
+  const resetBtn = document.getElementById('btn-fresh-reset');
+  if (resetBtn) resetBtn.style.display = n > 0 ? 'inline-block' : 'none';
+
+  // Toggle AI Generation visibility block depending on mode on crop page
+  const aiSection = document.getElementById('ai-generator-section');
+  if (aiSection) {
+    aiSection.style.display = (state.mode === 'photo' && n === 1) ? 'block' : 'none';
+  }
+
+  currentStage = n;
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// Global Start Fresh/Reset Functionality
+function handleFreshReset() {
+  if (confirm("Are you sure you want to start fresh? All adjustments will be lost.")) {
+    state.originalImage = null;
+    state.croppedCanvas = null;
+    state.previewCanvas = null;
+    state.maskCanvas = null;
+    state.svgString = null;
+    state.cropRect = null;
+    state.contours = null;
+    state.processedContours = [];
+    state.vectorBounds = null;
+    state.eraserPolygons = [];
+    state.eraserHistory = [];
+    state.lastGeneratedGridBase64 = null;
+    const fileInputEl = document.getElementById('file-input');
+    if (fileInputEl) fileInputEl.value = '';
+    const cropBoxEl = document.getElementById('crop-box');
+    if (cropBoxEl) cropBoxEl.style.display = 'none';
+    cropState.box = {x:0, y:0, w:0, h:0};
+    goTo(0);
+  }
+}
+listen('btn-fresh-reset', 'click', handleFreshReset);
+
+// ═══════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════
+function toast(msg, dur=2400) {
+  const t = document.getElementById('toast');
+  if (t) {
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), dur);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  STAGE 0: MODE SELECTION & UPLOAD
+// ═══════════════════════════════════════════════
+listen('btn-mode-sig', 'click', () => {
+  state.mode = 'signature';
+  const sigBtn = document.getElementById('btn-mode-sig');
+  const photoBtn = document.getElementById('btn-mode-photo');
+  if (sigBtn) sigBtn.classList.add('active');
+  if (photoBtn) photoBtn.classList.remove('active');
+  
+  const dropIcon = document.getElementById('drop-icon');
+  const dropTitle = document.getElementById('drop-title');
+  const cropHint = document.getElementById('crop-hint');
+  const aspectPresets = document.getElementById('aspect-presets-container');
+  
+  if (dropIcon) dropIcon.textContent = '✍️';
+  if (dropTitle) dropTitle.textContent = 'Drop your signature here';
+  if (cropHint) cropHint.textContent = 'Tip: Make the selection box as tight as possible around your signature.';
+  if (aspectPresets) aspectPresets.style.display = 'none';
+});
+
+listen('btn-mode-photo', 'click', () => {
+  state.mode = 'photo';
+  const sigBtn = document.getElementById('btn-mode-sig');
+  const photoBtn = document.getElementById('btn-mode-photo');
+  if (photoBtn) photoBtn.classList.add('active');
+  if (sigBtn) sigBtn.classList.remove('active');
+  
+  const dropIcon = document.getElementById('drop-icon');
+  const dropTitle = document.getElementById('drop-title');
+  const cropHint = document.getElementById('crop-hint');
+  const aspectPresets = document.getElementById('aspect-presets-container');
+  
+  if (dropIcon) dropIcon.textContent = '👤';
+  if (dropTitle) dropTitle.textContent = 'Drop your portrait photo here';
+  if (cropHint) cropHint.textContent = 'Tip: Adjust the crop box to frame your head and shoulders correctly.';
+  if (aspectPresets) aspectPresets.style.display = 'block';
+});
+
+const dropZone = document.getElementById('drop-zone');
+if (dropZone) {
+  dropZone.addEventListener('click', () => {
+    const fileInputEl = document.getElementById('file-input');
+    if (fileInputEl) fileInputEl.click();
+  });
+  dropZone.addEventListener('dragover', e => { 
+    e.preventDefault(); 
+    dropZone.classList.add('drag-over'); 
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if(f && f.type.startsWith('image/')) loadImage(f);
+    else toast('⚠️ Please drop a valid image file');
+  });
+}
+
+const fileInputEl = document.getElementById('file-input');
+if (fileInputEl) {
+  fileInputEl.addEventListener('change', e => {
+    if(e.target.files[0]) loadImage(e.target.files[0]);
+  });
+}
+
+function loadImage(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      state.originalImage = img;
+      state.eraserPolygons = [];
+      state.eraserHistory = [];
+      state.lastGeneratedGridBase64 = null;
+      setupCrop(img);
+      goTo(1);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ═══════════════════════════════════════════════
+//  STAGE 1: INTERACTIVE CROP BOX (8-POINT MULTI-DRAG) & ROTATION
+// ═══════════════════════════════════════════════
+let cropState = { 
+  dragging: false, 
+  resizing: false, 
+  drawing: false,
+  handle: null, 
+  startX: 0, 
+  startY: 0, 
+  box: {x:0, y:0, w:0, h:0},
+  origBox: {x:0, y:0, w:0, h:0}
+};
+const cropWrapper = document.getElementById('crop-wrapper');
+const cropImg = document.getElementById('crop-img');
+const cropBox = document.getElementById('crop-box');
+
+function setupCrop(img) {
+  const rotateEl = document.getElementById('sl-rotate');
+  if (rotateEl) rotateEl.value = 0;
+  const valRotateEl = document.getElementById('val-rotate');
+  if (valRotateEl) valRotateEl.textContent = '0°';
+  
+  // Clear any existing crop box state so it recalculates centered
+  cropState.box = {x:0, y:0, w:0, h:0};
+  
+  // Set default aspect ratio based on mode
+  document.querySelectorAll('.aspect-chip').forEach(c => c.classList.remove('active'));
+  if (state.mode === 'photo') {
+    const defaultPhotoChip = document.querySelector('.aspect-chip[data-ratio="3.5:4.5"]');
+    if (defaultPhotoChip) defaultPhotoChip.classList.add('active');
+  } else {
+    const defaultSigChip = document.querySelector('.aspect-chip[data-ratio="free"]');
+    if (defaultSigChip) defaultSigChip.classList.add('active');
+  }
+
+  // Draw the initial unrotated display canvas
+  updateCropDisplay();
+}
+
+function updateCropDisplay() {
+  if (!state.originalImage) return;
+
+  const rotateEl = document.getElementById('sl-rotate');
+  const angle = rotateEl ? +rotateEl.value : 0;
+  const rad = angle * Math.PI / 180;
+
+  const valRotateEl = document.getElementById('val-rotate');
+  if (valRotateEl) valRotateEl.textContent = `${angle}°`;
+
+  const img = state.originalImage;
+  const origW = img.naturalWidth;
+  const origH = img.naturalHeight;
+
+  // Downscale image to a max dimension of 600px for high performance 60fps rendering
+  const maxDim = 600;
+  const scale = Math.min(1, maxDim / Math.max(origW, origH));
+  const w = origW * scale;
+  const h = origH * scale;
+
+  // Calculate rotated boundaries to prevent any corner clipping
+  const rotW = Math.abs(w * Math.cos(rad)) + Math.abs(h * Math.sin(rad));
+  const rotH = Math.abs(w * Math.sin(rad)) + Math.abs(h * Math.cos(rad));
+
+  const displayCanvas = document.createElement('canvas');
+  displayCanvas.width = rotW;
+  displayCanvas.height = rotH;
+  const ctx = displayCanvas.getContext('2d');
+
+  // Draw rotated image centered on canvas
+  ctx.translate(rotW / 2, rotH / 2);
+  ctx.rotate(rad);
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+
+  if (cropImg) {
+    cropImg.src = displayCanvas.toDataURL();
+    cropImg.onload = () => {
+      // If we don't have a crop box yet, initialize a centered one
+      if (cropState.box.w === 0 || cropState.box.h === 0) {
+        initDefaultCropBox();
+      } else {
+        // Keep existing box coordinates aligned within display
+        renderCropBox();
+      }
+    };
+  }
+}
+
+function getWrapperRect() { 
+  return cropWrapper ? cropWrapper.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 }; 
+}
+function imgDisplayRect() {
+  if (!cropImg) return { left: 0, top: 0, w: 0, h: 0 };
+  const ir = cropImg.getBoundingClientRect();
+  const wr = getWrapperRect();
+  return { left: ir.left-wr.left, top: ir.top-wr.top, w: ir.width, h: ir.height };
+}
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+
+function getPos(e) {
+  const wr = getWrapperRect();
+  if(e.touches && e.touches.length > 0) return { x: e.touches[0].clientX - wr.left, y: e.touches[0].clientY - wr.top };
+  return { x: e.clientX - wr.left, y: e.clientY - wr.top };
+}
+
+function renderCropBox() {
+  const b = cropState.box;
+  if (!cropBox) return;
+  if(b.w < 5 || b.h < 5){ cropBox.style.display='none'; return; }
+  cropBox.style.display = 'block';
+  cropBox.style.left = b.x + 'px';
+  cropBox.style.top = b.y + 'px';
+  cropBox.style.width = b.w + 'px';
+  cropBox.style.height = b.h + 'px';
+}
+
+// Crop stage aspect-ratio selector actions safely
+document.querySelectorAll('.aspect-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.aspect-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    initDefaultCropBox();
+  });
+});
+
+if (cropWrapper) {
+  cropWrapper.addEventListener('mousedown', onCropStart);
+  cropWrapper.addEventListener('touchstart', onCropStart, {passive:false});
+}
+
+function onCropStart(e) {
+  e.preventDefault();
+  const pos = getPos(e);
+  const target = e.target;
+  
+  if (target.classList.contains('crop-handle')) {
+    cropState.resizing = true;
+    cropState.handle = target.dataset.handle;
+    cropState.startX = pos.x;
+    cropState.startY = pos.y;
+    cropState.origBox = {...cropState.box};
+  } else if (target === cropBox || (cropBox && cropBox.contains(target))) {
+    cropState.dragging = true;
+    cropState.startX = pos.x;
+    cropState.startY = pos.y;
+    cropState.origBox = {...cropState.box};
+  } else {
+    // Click outside of cropbox initializes drawing fresh box
+    cropState.drawing = true;
+    cropState.startX = pos.x;
+    cropState.startY = pos.y;
+    cropState.box = {x: pos.x, y: pos.y, w:0, h:0};
+  }
+  
+  document.addEventListener('mousemove', onCropMove);
+  document.addEventListener('mouseup', onCropEnd);
+  document.addEventListener('touchmove', onCropMove, {passive:false});
+  document.addEventListener('touchend', onCropEnd);
+}
+
+function onCropMove(e) {
+  e.preventDefault();
+  const pos = getPos(e);
+  const ir = imgDisplayRect();
+  const maxX = ir.left + ir.w; 
+  const maxY = ir.top + ir.h;
+
+  const ratioChip = document.querySelector('.aspect-chip.active');
+  let aspect = null;
+  if (ratioChip && ratioChip.dataset.ratio !== 'free') {
+    const parts = ratioChip.dataset.ratio.split(':');
+    aspect = +parts[0] / +parts[1];
+  }
+
+  if (cropState.drawing) {
+    let x = clamp(Math.min(pos.x, cropState.startX), ir.left, maxX);
+    let y = clamp(Math.min(pos.y, cropState.startY), ir.top, maxY);
+    let w = clamp(Math.abs(pos.x - cropState.startX), 0, maxX - x);
+    let h = clamp(Math.abs(pos.y - cropState.startY), 0, maxY - y);
+    
+    if (aspect) {
+      if (w / h > aspect) w = h * aspect;
+      else h = w / aspect;
+    }
+    cropState.box = {x, y, w, h};
+  } else if (cropState.dragging) {
+    const dx = pos.x - cropState.startX;
+    const dy = pos.y - cropState.startY;
+    let nx = clamp(cropState.origBox.x + dx, ir.left, maxX - cropState.origBox.w);
+    let ny = clamp(cropState.origBox.y + dy, ir.top, maxY - cropState.origBox.h);
+    cropState.box = { ...cropState.origBox, x: nx, y: ny };
+  } else if (cropState.resizing) {
+    const ob = cropState.origBox;
+    let {x, y, w, h} = ob;
+    const dx = pos.x - cropState.startX;
+    const dy = pos.y - cropState.startY;
+    const handle = cropState.handle;
+
+    // Adjust box bounds depending on handle dragged
+    if (handle === 'tl') { x += dx; y += dy; w -= dx; h -= dy; }
+    else if (handle === 'tr') { w += dx; y += dy; h -= dy; }
+    else if (handle === 'bl') { x += dx; w -= dx; h += dy; }
+    else if (handle === 'br') { w += dx; h += dy; }
+    else if (handle === 't')  { y += dy; h -= dy; }
+    else if (handle === 'b')  { h += dy; }
+    else if (handle === 'l')  { x += dx; w -= dx; }
+    else if (handle === 'r')  { w += dx; }
+
+    // Maintain locked aspect ratio structure
+    if (aspect) {
+      if (['r', 'b', 'br'].includes(handle)) {
+        h = w / aspect;
+      } else if (['l', 't', 'tl'].includes(handle)) {
+        w = h * aspect;
+      } else if (handle === 'tr') {
+        h = w / aspect;
+      } else if (handle === 'bl') {
+        w = h * aspect;
+      }
+    }
+
+    if(w > 12 && h > 12) {
+      cropState.box = {
+        x: clamp(x, ir.left, maxX - 12),
+        y: clamp(y, ir.top, maxY - 12),
+        w: clamp(w, 12, maxX - x),
+        h: clamp(h, 12, maxY - y)
+      };
+    }
+  }
+  renderCropBox();
+}
+
+function onCropEnd() {
+  cropState.dragging = false; cropState.resizing = false; cropState.drawing = false;
+  document.removeEventListener('mousemove', onCropMove);
+  document.removeEventListener('mouseup', onCropEnd);
+  document.removeEventListener('touchmove', onCropMove);
+  document.removeEventListener('touchend', onCropEnd);
+}
+
+// Straighten Rotation Control Binding
+listen('sl-rotate', 'input', updateCropDisplay);
+
+listen('btn-rot-left', 'click', () => {
+  const rotateEl = document.getElementById('sl-rotate');
+  if (rotateEl) {
+    let val = +rotateEl.value - 1;
+    if (val < -180) val = 180;
+    rotateEl.value = val;
+    updateCropDisplay();
+  }
+});
+
+listen('btn-rot-right', 'click', () => {
+  const rotateEl = document.getElementById('sl-rotate');
+  if (rotateEl) {
+    let val = +rotateEl.value + 1;
+    if (val > 180) val = -180;
+    rotateEl.value = val;
+    updateCropDisplay();
+  }
+});
+
+// Direct 90-degree Rotation increment handler with circular bounds clamping
+listen('btn-rot-90', 'click', () => {
+  const rotateEl = document.getElementById('sl-rotate');
+  if (rotateEl) {
+    let val = +rotateEl.value + 90;
+    if (val > 180) {
+      val = val - 360; 
+    }
+    rotateEl.value = val;
+    updateCropDisplay();
+  }
+});
+
+function getCroppedCanvasHighRes() {
+  const b = cropState.box;
+  const ir = imgDisplayRect();
+  if (b.w < 10 || b.h < 10) return null;
+
+  const img = state.originalImage;
+  const origW = img.naturalWidth;
+  const origH = img.naturalHeight;
+
+  const rotateEl = document.getElementById('sl-rotate');
+  const angle = rotateEl ? +rotateEl.value : 0;
+  const rad = angle * Math.PI / 180;
+
+  const rotW = Math.abs(origW * Math.cos(rad)) + Math.abs(origH * Math.sin(rad));
+  const rotH = Math.abs(origW * Math.sin(rad)) + Math.abs(origH * Math.cos(rad));
+
+  const highResCanvas = document.createElement('canvas');
+  highResCanvas.width = rotW;
+  highResCanvas.height = rotH;
+  const hrCtx = highResCanvas.getContext('2d');
+  hrCtx.translate(rotW / 2, rotH / 2);
+  hrCtx.rotate(rad);
+  hrCtx.drawImage(img, -origW / 2, -origH / 2, origW, origH);
+
+  const scaleX = rotW / ir.w;
+  const scaleY = rotH / ir.h;
+  const ix = (b.x - ir.left) * scaleX;
+  const iy = (b.y - ir.top) * scaleY;
+  const iw = b.w * scaleX;
+  const ih = b.h * scaleY;
+
+  const c = document.createElement('canvas');
+  c.width = Math.round(iw);
+  c.height = Math.round(ih);
+  c.getContext('2d').drawImage(
+    highResCanvas, 
+    Math.round(ix), Math.round(iy), Math.round(iw), Math.round(ih), 
+    0, 0, Math.round(iw), Math.round(ih)
+  );
+  return c;
+}
+
+listen('btn-crop-apply', 'click', () => {
+  const c = getCroppedCanvasHighRes();
+  if (!c) {
+    toast('Please construct or scale the crop selection first');
+    return;
+  }
+  
+  state.croppedCanvas = c;
+  applyCropAndProgress();
+});
+
+listen('btn-crop-skip', 'click', () => {
+  const img = state.originalImage;
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth; 
+  c.height = img.naturalHeight;
+  c.getContext('2d').drawImage(img, 0, 0);
+  
+  state.croppedCanvas = c;
+  state.cropRect = null;
+  applyCropAndProgress();
+});
+
+function applyCropAndProgress() {
+  const c = state.croppedCanvas;
+  if (!c) return;
+
+  // Create downscaled processing canvas for interactive Stage 2 tasks
+  const maxDim = 800;
+  const previewC = document.createElement('canvas');
+  const scale = Math.min(1, maxDim / Math.max(c.width, c.height));
+  previewC.width = Math.round(c.width * scale);
+  previewC.height = Math.round(c.height * scale);
+  previewC.getContext('2d').drawImage(c, 0, 0, previewC.width, previewC.height);
+  state.previewCanvas = previewC;
+
+  if (state.mode === 'photo') {
+    setupExport();
+    goTo(4);
+  } else {
+    setupThreshold();
+    goTo(2);
+  }
+}
+
+document.querySelectorAll('.btn-back-to-0').forEach(b => {
+  b.addEventListener('click', () => goTo(0));
+});
+
+// ═══════════════════════════════════════════════
+//  GEMINI API MULTI-ATTIRE GRID GENERATION (NANO BANANA 2)
+// ═══════════════════════════════════════════════
+listen('btn-gemini-generate', 'click', () => {
+  const savedKey = localStorage.getItem('gemini_api_key');
+  if (savedKey) {
+    executeGeminiGeneration(savedKey);
+  } else {
+    const keyModal = document.getElementById('gemini-key-modal');
+    if (keyModal) {
+      keyModal.style.display = 'flex';
+      const keyInput = document.getElementById('gemini-api-key-input');
+      if (keyInput) {
+        keyInput.value = '';
+        keyInput.focus();
+      }
+    }
+  }
+});
+
+listen('btn-cancel-key', 'click', () => {
+  const keyModal = document.getElementById('gemini-key-modal');
+  if (keyModal) keyModal.style.display = 'none';
+});
+
+listen('btn-save-key', 'click', () => {
+  const keyInput = document.getElementById('gemini-api-key-input');
+  const key = keyInput ? keyInput.value.trim() : '';
+  if (!key) {
+    alert('Please enter a valid Google AI Studio API Key.');
+    return;
+  }
+  localStorage.setItem('gemini_api_key', key);
+  const keyModal = document.getElementById('gemini-key-modal');
+  if (keyModal) keyModal.style.display = 'none';
+  executeGeminiGeneration(key);
+});
+
+async function executeGeminiGeneration(apiKey) {
+  const img = state.originalImage;
+  if (!img) {
+    toast('⚠️ Please upload a reference image first.');
+    return;
+  }
+
+  const useCropEl = document.getElementById('toggle-gemini-use-crop');
+  const useCrop = useCropEl ? useCropEl.checked : true;
+
+  let sourceCanvas = null;
+
+  if (useCrop) {
+    sourceCanvas = getCroppedCanvasHighRes();
+    if (!sourceCanvas) {
+      toast('⚠️ Please construct or adjust the crop box around your face first.');
+      return;
+    }
+  } else {
+    // Dynamically draw uncropped high-resolution image directly
+    sourceCanvas = document.createElement('canvas');
+    sourceCanvas.width = img.naturalWidth;
+    sourceCanvas.height = img.naturalHeight;
+    sourceCanvas.getContext('2d').drawImage(img, 0, 0);
+    toast('🔮 Processing using full uncropped original image...');
+  }
+
+  // Show loading indicator
+  const loadingOverlay = document.getElementById('gemini-loading-overlay');
+  if (loadingOverlay) loadingOverlay.style.display = 'flex';
+
+  // Extract base64 image data payload from high-res crop
+  const base64Data = sourceCanvas.toDataURL('image/png').split(',')[1];
+
+  const promptText = `Using the provided reference image, create a 3×3 grid containing 9 different passport-style portrait photographs of the exact same person. Preserve facial identity with maximum accuracy, including face shape, forehead, eyes, eyebrows, nose, lips, ears, jawline, chin, hairstyle, hairline, skin tone, skin texture, age, expression, gaze, and all unique facial characteristics. The person must remain instantly recognizable and look exactly like the reference image. Do not beautify, modify, stylize, age, de-age, slim, enhance, or alter the face in any way. Maintain the same natural expression and facial proportions throughout all 9 images.
+Generate realistic professional studio photographs suitable for government examinations, job applications, passport applications, admit cards, official documents, professional profiles, and identity verification purposes. Each of the 9 photographs should feature a different realistic attire while keeping the face completely unchanged. If the subject is male, intelligently vary clothing among formal shirts, collared shirts, polo shirts, plain crew-neck t-shirts, full-sleeve shirts, business-casual shirts, and other realistic everyday attire commonly worn for official photographs. If the subject is female, intelligently vary clothing among sarees, salwar suits, kurtis, formal shirts, professional office wear, ethnic wear, and modest everyday attire suitable for professional photographs. Clothing should appear natural, realistic, and appropriate for a professional studio portrait.
+If the uploaded image contains any religious, cultural, ethnic, or traditional attire, head covering, turban, hijab, scarf, dupatta, cap, robe, stole, or other distinctive clothing element, preserve that aspect of the person's appearance and create realistic variations that remain faithful to the same religious, cultural, or traditional style. Generate diverse yet authentic attire variations within that same style rather than replacing it with unrelated clothing. Ensure all variations remain respectful, realistic, and culturally consistent.
+Use a clean professional photography studio setup with a seamless wrinkle-free white, off-white, or light grey background. Background must be uniformly lit and completely free from patterns, textures, furniture, objects, scenery, decorations, gradients, windows, walls, environmental elements, or distractions. The background should resemble a professional passport-photo studio.
+Capture the subject using a professional rear-camera DSLR or mirrorless camera perspective, never a selfie camera. Ensure natural facial proportions with no wide-angle distortion, no front-camera stretching, no selfie appearance, no mirrored-camera look, and no smartphone selfie characteristics. Simulate a professional photographer standing several feet away using an 85mm portrait lens on a full-frame camera. Maintain head-and-shoulders framing, centered composition, direct eye contact with the camera, neutral expression, natural skin texture, realistic pores, balanced exposure, soft studio lighting, authentic shadows, sharp focus, and high-resolution detail.
+The final result must appear indistinguishable from genuine studio photographs captured on different days by a professional photographer while preserving the exact same identity in every image. All 9 portraits should look authentic, natural, believable, and suitable for official use.`;
+
+  try {
+    // Model "gemini-3.1-flash-image" (Nano Banana 2)
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: 'image/png',
+                  data: base64Data
+                }
+              },
+              {
+                text: promptText
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseModalities: ["IMAGE"] // Force image outputs
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => ({}));
+      const errMsg = errJson.error ? errJson.error.message : 'Unknown response error.';
+      throw new Error(errMsg);
+    }
+
+    const data = await response.json();
+    const candidates = data.candidates;
+    if (candidates && candidates.length > 0 && candidates[0].content && candidates[0].content.parts && candidates[0].content.parts.length > 0) {
+      const imgPart = candidates[0].content.parts.find(p => p.inlineData); // Extract image bytes
+      if (imgPart && imgPart.inlineData && imgPart.inlineData.data) {
+        const gridBase64 = imgPart.inlineData.data;
+        displayGeneratedGrid(gridBase64);
+      } else {
+        throw new Error('Image data was not returned in the API response payload.');
+      }
+    } else {
+      throw new Error('Could not resolve image candidates from the response structures.');
+    }
+  } catch (error) {
+    console.error(error);
+    alert(`❌ Generation Failed: ${error.message}\n\nPlease check your key, internet connection, and AI Studio quotas.`);
+    if (error.message.includes('API key')) {
+      localStorage.removeItem('gemini_api_key');
+    }
+  } finally {
+    if (loadingOverlay) loadingOverlay.style.display = 'none';
+  }
+}
+
+function displayGeneratedGrid(base64Data) {
+  const resultModal = document.getElementById('gemini-result-modal');
+  const resultImg = document.getElementById('gemini-generated-img');
+  if (resultModal && resultImg) {
+    state.lastGeneratedGridBase64 = base64Data;
+    resultImg.src = `data:image/png;base64,${base64Data}`;
+    resultModal.style.display = 'flex';
+  }
+}
+
+listen('btn-close-result', 'click', () => {
+  const resultModal = document.getElementById('gemini-result-modal');
+  if (resultModal) resultModal.style.display = 'none';
+});
+
+listen('btn-download-grid-raw', 'click', () => {
+  if (state.lastGeneratedGridBase64) {
+    const rawUrl = `data:image/png;base64,${state.lastGeneratedGridBase64}`;
+    triggerDownload(rawUrl, 'passport_attire_grid_3x3.png');
+    toast('✓ Original 3×3 Grid downloaded');
+  }
+});
+
+listen('btn-crop-grid-photo', 'click', () => {
+  if (state.lastGeneratedGridBase64) {
+    const gridImg = new Image();
+    gridImg.onload = () => {
+      // Reload Crop Step with the newly generated grid image
+      state.originalImage = gridImg;
+      state.eraserPolygons = [];
+      state.eraserHistory = [];
+      
+      const resultModal = document.getElementById('gemini-result-modal');
+      if (resultModal) resultModal.style.display = 'none';
+      
+      setupCrop(gridImg);
+      toast('✂ Grid loaded! Select a single portrait of your choice.');
+    };
+    gridImg.src = `data:image/png;base64,${state.lastGeneratedGridBase64}`;
+  }
+});
+
+// ═══════════════════════════════════════════════
+//  STAGE 2: THRESHOLD, PERSISTENT MASK, & INTERACTIVE LASSO ERASER
+// ═══════════════════════════════════════════════
+function setupThreshold() {
+  drawOrig();
+  setMaskTool('adjust');
+  computeMask();
+}
+
+function drawOrig() {
+  const c = document.getElementById('canvas-orig');
+  const src = state.previewCanvas;
+  if (c && src) {
+    c.width = src.width; c.height = src.height;
+    c.getContext('2d').drawImage(src, 0, 0);
+  }
+}
+
+function computeMask() {
+  const src = state.previewCanvas;
+  const thresholdInput = document.getElementById('sl-threshold');
+  const noiseInput = document.getElementById('sl-noise');
+  const blurInput = document.getElementById('sl-blur');
+  if (!src || !thresholdInput || !noiseInput || !blurInput) return;
+
+  const threshold = +thresholdInput.value;
+  const noiseLevel = +noiseInput.value;
+  const blurRadius = +blurInput.value;
+  
+  const invertEl = document.getElementById('toggle-invert');
+  const invert = invertEl ? invertEl.checked : false;
+  const contrastEl = document.getElementById('toggle-contrast');
+  const autoContrast = contrastEl ? contrastEl.checked : true;
+
+  const offC = document.createElement('canvas');
+  offC.width = src.width; offC.height = src.height;
+  const ctx = offC.getContext('2d');
+  ctx.drawImage(src, 0, 0);
+  let data = ctx.getImageData(0, 0, offC.width, offC.height);
+  let pixels = data.data;
+
+  if(autoContrast) {
+    let minL=255, maxL=0;
+    for(let i=0;i<pixels.length;i+=4){
+      const l = 0.299*pixels[i]+0.587*pixels[i+1]+0.114*pixels[i+2];
+      if(l<minL) minL=l; if(l>maxL) maxL=l;
+    }
+    const range = maxL-minL || 1;
+    for(let i=0;i<pixels.length;i+=4){
+      pixels[i]   = clamp(((pixels[i]  -minL)/range*255),0,255);
+      pixels[i+1] = clamp(((pixels[i+1]-minL)/range*255),0,255);
+      pixels[i+2] = clamp(((pixels[i+2]-minL)/range*255),0,255);
+    }
+    ctx.putImageData(data, 0, 0);
+  }
+
+  const W = offC.width, H = offC.height;
+  const gray = new Float32Array(W*H);
+  pixels = ctx.getImageData(0,0,W,H).data;
+  for(let i=0;i<W*H;i++){
+    gray[i] = (0.299*pixels[i*4]+0.587*pixels[i*4+1]+0.114*pixels[i*4+2]);
+  }
+
+  const hist = new Int32Array(256);
+  for(let i=0;i<gray.length;i++) hist[Math.round(gray[i])]++;
+  let peakVal=0, peakIdx=200;
+  for(let v=100;v<256;v++) { if(hist[v]>peakVal){ peakVal=hist[v]; peakIdx=v; } }
+
+  const maskC = document.getElementById('canvas-mask');
+  if (!maskC) return;
+  maskC.width = W; maskC.height = H;
+  const mCtx = maskC.getContext('2d');
+  const maskData = mCtx.createImageData(W, H);
+  const md = maskData.data;
+
+  for(let i=0;i<W*H;i++){
+    const diff = Math.abs(gray[i] - peakIdx);
+    let isFg = diff > threshold;
+    if(invert) isFg = !isFg;
+    const v = isFg ? 0 : 255;
+    md[i*4]=v; md[i*4+1]=v; md[i*4+2]=v; md[i*4+3]=255;
+  }
+
+  mCtx.putImageData(maskData, 0, 0);
+
+  if(noiseLevel > 0) {
+    applyMorphClose(maskC, noiseLevel);
+  }
+
+  if(blurRadius > 0) {
+    applyBlur(maskC, blurRadius);
+  }
+
+  // Paint persistent lasso eraser paths on top of current mask frame as raw background color
+  if (state.eraserPolygons && state.eraserPolygons.length > 0) {
+    const finalCtx = maskC.getContext('2d');
+    finalCtx.fillStyle = '#ffffff';
+    state.eraserPolygons.forEach(poly => {
+      if (poly.length < 3) return;
+      finalCtx.beginPath();
+      finalCtx.moveTo(poly[0][0], poly[0][1]);
+      for (let i = 1; i < poly.length; i++) {
+        finalCtx.lineTo(poly[i][0], poly[i][1]);
+      }
+      finalCtx.closePath();
+      finalCtx.fill();
+    });
+  }
+
+  state.maskCanvas = maskC;
+}
+
+function applyMorphClose(canvas, radius) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const src = ctx.getImageData(0,0,W,H).data;
+  const out = new Uint8ClampedArray(src.length);
+  const r = Math.ceil(radius/2);
+
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    let minV=255;
+    for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
+      const nx=clamp(x+dx,0,W-1), ny=clamp(y+dy,0,H-1);
+      const v=src[(ny*W+nx)*4];
+      if(v<minV) minV=v;
+    }
+    const i=(y*W+x)*4;
+    out[i]=out[i+1]=out[i+2]=minV; out[i+3]=255;
+  }
+  const eroded = new Uint8ClampedArray(out);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    let maxV=0;
+    for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
+      const nx=clamp(x+dx,0,W-1), ny=clamp(y+dy,0,H-1);
+      const v=eroded[(ny*W+nx)*4];
+      if((255-v)>maxV) maxV=(255-v);
+    }
+    const i=(y*W+x)*4;
+    const v=255-maxV;
+    out[i]=out[i+1]=out[i+2]=v; out[i+3]=255;
+  }
+  const od=new ImageData(out,W,H);
+  ctx.putImageData(od,0,0);
+}
+
+function applyBlur(canvas, radius) {
+  const ctx = canvas.getContext('2d');
+  ctx.filter = `blur(${radius}px)`;
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width; tmp.height = canvas.height;
+  tmp.getContext('2d').drawImage(canvas,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(tmp,0,0);
+  ctx.filter='none';
+}
+
+function setMaskTool(tool) {
+  activeMaskTool = tool;
+  const container = document.getElementById('mask-canvas-container');
+  const adjustBtn = document.getElementById('btn-mask-tool-adjust');
+  const eraseBtn = document.getElementById('btn-mask-tool-erase');
+  
+  if (adjustBtn) adjustBtn.classList.toggle('active', tool === 'adjust');
+  if (eraseBtn) eraseBtn.classList.toggle('active', tool === 'erase');
+  
+  if (container) {
+    container.style.cursor = tool === 'erase' ? 'crosshair' : 'default';
+  }
+}
+
+listen('btn-mask-tool-adjust', 'click', () => setMaskTool('adjust'));
+listen('btn-mask-tool-erase', 'click', () => setMaskTool('erase'));
+
+listen('btn-mask-undo-erase', 'click', () => {
+  if (state.eraserHistory && state.eraserHistory.length > 0) {
+    state.eraserPolygons = state.eraserHistory.pop();
+    computeMask();
+    if (state.eraserHistory.length === 0) {
+      const undoBtn = document.getElementById('btn-mask-undo-erase');
+      if (undoBtn) undoBtn.setAttribute('disabled', 'true');
+    }
+    toast('🔄 Erase undone');
+  }
+});
+
+if (maskContainer) {
+  maskContainer.addEventListener('mousedown', onMaskLassoStart);
+  maskContainer.addEventListener('mousemove', onMaskLassoMove);
+  window.addEventListener('mouseup', onMaskLassoEnd);
+  
+  maskContainer.addEventListener('touchstart', onMaskLassoStart, {passive: false});
+  maskContainer.addEventListener('touchmove', onMaskLassoMove, {passive: false});
+  window.addEventListener('touchend', onMaskLassoEnd);
+}
+
+function onMaskLassoStart(e) {
+  if (activeMaskTool !== 'erase') return;
+  e.preventDefault();
+  isDrawingMaskLasso = true;
+  currentMaskLassoPath = [];
+  
+  const canvas = document.getElementById('mask-lasso-canvas');
+  if (canvas && maskContainer) {
+    const rect = maskContainer.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  
+  const pos = getMaskLassoPos(e);
+  if (pos && pos.imgPos) {
+    currentMaskLassoPath.push(pos.imgPos);
+    drawMaskLassoOnCanvas();
+  }
+}
+
+function onMaskLassoMove(e) {
+  if (!isDrawingMaskLasso) return;
+  e.preventDefault();
+  const pos = getMaskLassoPos(e);
+  if (pos && pos.imgPos) {
+    currentMaskLassoPath.push(pos.imgPos);
+    drawMaskLassoOnCanvas();
+  }
+}
+
+function onMaskLassoEnd() {
+  if (!isDrawingMaskLasso) return;
+  isDrawingMaskLasso = false;
+  
+  if (currentMaskLassoPath.length > 2) {
+    // Commit lasso erase bounds to history index
+    if (!state.eraserHistory) state.eraserHistory = [];
+    state.eraserHistory.push(JSON.parse(JSON.stringify(state.eraserPolygons)));
+    if (state.eraserHistory.length > 15) state.eraserHistory.shift();
+    
+    const undoBtn = document.getElementById('btn-mask-undo-erase');
+    if (undoBtn) undoBtn.removeAttribute('disabled');
+    
+    state.eraserPolygons.push(currentMaskLassoPath);
+    computeMask();
+    toast('🧹 Erase successfully applied');
+  }
+  
+  const canvas = document.getElementById('mask-lasso-canvas');
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+function getMaskLassoPos(e) {
+  const container = document.getElementById('mask-canvas-container');
+  if (!container) return null;
+  const rect = container.getBoundingClientRect();
+  
+  let clientX, clientY;
+  if (e.touches && e.touches.length > 0) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  }
+  
+  const canvasX = clientX - rect.left;
+  const canvasY = clientY - rect.top;
+  
+  const imgPos = screenToMaskCanvasCoords(clientX, clientY);
+  return { canvasX, canvasY, imgPos };
+}
+
+function screenToMaskCanvasCoords(screenX, screenY) {
+  const canvas = document.getElementById('canvas-mask');
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  
+  const x = (screenX - rect.left) * scaleX;
+  const y = (screenY - rect.top) * scaleY;
+  return [x, y];
+}
+
+function drawMaskLassoOnCanvas() {
+  const canvas = document.getElementById('mask-lasso-canvas');
+  const maskC = document.getElementById('canvas-mask');
+  if (!canvas || !maskC || currentMaskLassoPath.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.beginPath();
+  const rect = maskC.getBoundingClientRect();
+  const scaleX = rect.width / maskC.width;
+  const scaleY = rect.height / maskC.height;
+  
+  ctx.moveTo(currentMaskLassoPath[0][0] * scaleX, currentMaskLassoPath[0][1] * scaleY);
+  for (let i = 1; i < currentMaskLassoPath.length; i++) {
+    ctx.lineTo(currentMaskLassoPath[i][0] * scaleX, currentMaskLassoPath[i][1] * scaleY);
+  }
+  
+  ctx.strokeStyle = '#dc2626';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 5]);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+}
+
+// Attach listeners for range inputs defensively
+['sl-threshold','sl-noise','sl-blur'].forEach(id => {
+  const el = document.getElementById(id);
+  const valEl = document.getElementById('val-'+id.replace('sl-',''));
+  if (el && valEl) {
+    el.addEventListener('input', () => {
+      valEl.textContent = el.value;
+      computeMask();
+    });
+  }
+});
+
+// Contour generation hook triggered ONCE when advancing to Step 3
+listen('btn-to-vector', 'click', () => {
+  extractRawContours();
+  goTo(3);
+  generateVector(); // Execute vector rendering synchronously with zero loading latency
+});
+
+listen('btn-back-1', 'click', () => goTo(1));
+
+function extractRawContours() {
+  const mask = state.maskCanvas;
+  if (!mask) return;
+  const W = mask.width, H = mask.height;
+  const ctx = mask.getContext('2d');
+  const data = ctx.getImageData(0,0,W,H).data;
+
+  const grid = new Uint8Array(W*H);
+  for(let i=0;i<W*H;i++){
+    grid[i] = data[i*4] < 128 ? 1 : 0;
+  }
+
+  // Save base Marching Squares structures
+  state.contours = marchingSquares(grid, W, H);
+}
+
+// ═══════════════════════════════════════════════
+//  STAGE 3: VECTORIZATION (SMOOTH & TIGHT ALIGNED VIEWS)
+// ═══════════════════════════════════════════════
+function generateVector() {
+  const mask = state.maskCanvas;
+  if(!mask){ toast('No active threshold mask found'); return; }
+  
+  const smoothInput = document.getElementById('sl-smooth');
+  const smoothing = smoothInput ? +smoothInput.value : 3;
+
+  // Apply smoothing and simplification rules
+  state.processedContours = [];
+  state.contours.forEach(contour => {
+    const simplified = rdp(contour, 1.2);
+    const pts = smoothPolyline(simplified, smoothing);
+    if (pts.length >= 2) {
+      state.processedContours.push(pts);
+    }
+  });
+
+  // Compute bounding limits for a tighter viewBox
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let hasPoints = false;
+  const pathParts = [];
+
+  state.processedContours.forEach(pts => {
+    let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+    
+    // Evaluate starting vertex inside bounds to prevent clipping shifts
+    const p0x = pts[0][0], p0y = pts[0][1];
+    if (p0x < minX) minX = p0x;
+    if (p0x > maxX) maxX = p0x;
+    if (p0y < minY) minY = p0y;
+    if (p0y > maxY) maxY = p0y;
+    hasPoints = true;
+
+    for (let i = 1; i < pts.length; i++) {
+      const px = pts[i][0], py = pts[i][1];
+      d += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
+      if (px < minX) minX = px;
+      if (px > maxX) maxX = px;
+      if (py < minY) minY = py;
+      if (py > maxY) maxY = py;
+    }
+    d += ' Z';
+    pathParts.push(d);
+  });
+
+  const W = mask.width, H = mask.height;
+
+  if (!hasPoints) {
+    minX = 0; minY = 0; maxX = W; maxY = H;
+  } else {
+    const pad = 4;
+    minX = Math.max(0, Math.floor(minX - pad));
+    minY = Math.max(0, Math.floor(minY - pad));
+    maxX = Math.min(W, Math.ceil(maxX + pad));
+    maxY = Math.min(H, Math.ceil(maxY + pad));
+  }
+
+  state.vectorBounds = { minX, minY, cropW: maxX - minX, cropH: maxY - minY };
+
+  const allPaths = pathParts.join(' ');
+  const strokeInput = document.getElementById('sl-weight');
+  const strokeW = strokeInput ? +strokeInput.value : 1;
+
+  // Construct fully transparent inline SVG element
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" width="${maxX - minX}" height="${maxY - minY}" style="background:transparent; display:block;">
+  <path d="${allPaths}" fill="#000000" stroke="#000000" stroke-width="${strokeW}" stroke-linejoin="round" stroke-linecap="round" fill-rule="evenodd"/>
+</svg>`;
+  
+  state.svgString = svg;
+
+  const container = document.getElementById('svg-container');
+  if (container) {
+    container.innerHTML = svg;
+    const svgEl = container.querySelector('svg');
+    if (svgEl) {
+      svgEl.style.maxWidth = '100%';
+      svgEl.style.maxHeight = '60vh';
+      svgEl.style.width = 'auto';
+      svgEl.style.height = 'auto';
+    }
+  }
+}
+
+function marchingSquares(grid, W, H) {
+  const visited = new Uint8Array(W*H);
+  const contours = [];
+  function getCell(x,y){
+    if(x<0||y<0||x>=W||y>=H) return 0;
+    return grid[y*W+x];
+  }
+
+  for(let y=0;y<H;y++) {
+    for(let x=0;x<W;x++) {
+      if(grid[y*W+x]===1 && !visited[y*W+x]) {
+        const neighbors = [getCell(x-1,y),getCell(x+1,y),getCell(x,y-1),getCell(x,y+1)];
+        if(neighbors.some(n=>n===0)) {
+          const c = traceBoundary(grid, visited, W, H, x, y);
+          if(c.length > 3) contours.push(c);
+        }
+      }
+    }
+  }
+  return contours;
+}
+
+function traceBoundary(grid, visited, W, H, sx, sy) {
+  const pts = [];
+  const dirs = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+  let x=sx, y=sy, dir=0;
+  const maxIter = W*H;
+  let iter=0;
+
+  function getCell(cx,cy){ if(cx<0||cy<0||cx>=W||cy>=H) return 0; return grid[cy*W+cx]; }
+
+  do {
+    if(iter++ > maxIter) break;
+    visited[y*W+x]=1;
+    pts.push([x,y]);
+    let found=false;
+    const startDir = (dir+6)%8;
+    for(let di=0;di<8;di++){
+      const d=(startDir+di)%8;
+      const nx=x+dirs[d][0], ny=y+dirs[d][1];
+      if(getCell(nx,ny)===1) {
+        const nd = [(d+2)%8,(d+4)%8,(d+6)%8];
+        const hasBg = nd.some(dd => getCell(nx+dirs[dd][0],ny+dirs[dd][1])===0) ||
+                      !getCell(nx-1,ny)||!getCell(nx+1,ny)||!getCell(nx,ny-1)||!getCell(nx,ny+1);
+        if(hasBg && !visited[ny*W+nx]) {
+          x=nx; y=ny; dir=d; found=true; break;
+        }
+      }
+    }
+    if(!found) break;
+  } while(!(x===sx && y===sy));
+
+  return pts;
+}
+
+function smoothPolyline(pts, factor) {
+  if(factor === 0 || pts.length < 3) return pts;
+  let cur = pts;
+  const iters = Math.min(factor, 5);
+  for(let it=0;it<iters;it++){
+    const next=[];
+    for(let i=0;i<cur.length-1;i++){
+      const p0=cur[i], p1=cur[i+1];
+      next.push([0.75*p0[0]+0.25*p1[0], 0.75*p0[1]+0.25*p1[1]]);
+      next.push([0.25*p0[0]+0.75*p1[0], 0.25*p0[1]+0.75*p1[1]]);
+    }
+    cur=next;
+  }
+  return cur;
+}
+
+function rdp(pts, epsilon) {
+  if(pts.length <= 2) return pts;
+  let maxDist=0, maxIdx=0;
+  for(let i=1;i<pts.length-1;i++){
+    const d=perpendicularDist(pts[i],pts[0],pts[pts.length-1]);
+    if(d>maxDist){maxDist=d;maxIdx=i;}
+  }
+  if(maxDist>epsilon){
+    const l=rdp(pts.slice(0,maxIdx+1),epsilon);
+    const r=rdp(pts.slice(maxIdx),epsilon);
+    return [...l.slice(0,-1),...r];
+  }
+  return [pts[0],pts[pts.length-1]];
+}
+function perpendicularDist([px,py],[ax,ay],[bx,by]){
+  const d=Math.hypot(bx-ax,by-ay);
+  if(d===0) return Math.hypot(px-ax,py-ay);
+  return Math.abs((by-ay)*px-(bx-ax)*py+bx*ay-by*ax)/d;
+}
+
+// Wire vector range updates defensively
+['sl-smooth','sl-weight'].forEach(id => {
+  const el = document.getElementById(id);
+  const valEl = document.getElementById('val-'+id.replace('sl-',''));
+  if (el && valEl) {
+    el.addEventListener('input', () => {
+      valEl.textContent = el.value;
+      generateVector(); // Re-render live SVG with updated configurations
+    });
+  }
+});
+
+// Direct Navigation Protection Wrapper on Step 3 Button
+listen('btn-to-export', 'click', () => {
+  try {
+    setupExport();
+  } catch (err) {
+    console.error("Export configuration fallback active:", err);
+  }
+  goTo(4);
+});
+listen('btn-back-2', 'click', () => goTo(2));
+
+
+// ═══════════════════════════════════════════════
+//  STAGE 4: EXPORT & QUALITY KB MIN-MAX LIMITER
+// ═══════════════════════════════════════════════
+function refreshExportPreview() {
+  const source = state.croppedCanvas;
+  if(!source) return;
+  const {w, h} = getOutputPixels();
+  if(!w||!h) return;
+
+  _aspectRatio = source.width / source.height;
+
+  const padEl = document.getElementById('toggle-pad');
+  const pad = padEl ? padEl.checked : false;
+  const padPct = pad ? 0.05 : 0;
+
+  const c = document.getElementById('canvas-export');
+  if (!c) return;
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+
+  if(state.fmt==='jpg') { ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); }
+  else { ctx.clearRect(0,0,w,h); }
+
+  // Draw stretched directly to fill exact custom boundaries (no white margins)
+  const innerW = w * (1 - 2 * padPct);
+  const innerH = h * (1 - 2 * padPct);
+  const dx = w * padPct;
+  const dy = h * padPct;
+  const dw = innerW;
+  const dh = innerH;
+
+  if (state.mode === 'photo') {
+    ctx.drawImage(source, dx, dy, dw, dh);
+  } else {
+    // Draws exact customized smoothed vectors directly to avoid raster scaling loss
+    if (state.processedContours && state.processedContours.length > 0 && state.vectorBounds) {
+      const { minX, minY, cropW, cropH } = state.vectorBounds;
+      
+      ctx.beginPath();
+      state.processedContours.forEach(pts => {
+        if (pts.length < 2) return;
+        const x0 = dx + ((pts[0][0] - minX) / cropW) * dw;
+        const y0 = dy + ((pts[0][1] - minY) / cropH) * dh;
+        ctx.moveTo(x0, y0);
+        for (let i = 1; i < pts.length; i++) {
+          const xi = dx + ((pts[i][0] - minX) / cropW) * dw;
+          const yi = dy + ((pts[i][1] - minY) / cropH) * dh;
+          ctx.lineTo(xi, yi);
+        }
+        ctx.closePath();
+      });
+      ctx.fillStyle = '#000000';
+      ctx.fill('evenodd');
+      
+      const strokeInput = document.getElementById('sl-weight');
+      const strokeW = strokeInput ? +strokeInput.value : 1;
+      if (strokeW > 0) {
+        ctx.lineWidth = strokeW * Math.min(dw / cropW, dh / cropH);
+        ctx.strokeStyle = '#000000';
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+    } else {
+      const mask = state.maskCanvas || source;
+      const tmpC = document.createElement('canvas');
+      tmpC.width = mask.width; tmpC.height = mask.height;
+      const tCtx = tmpC.getContext('2d');
+      const md = mask.getContext('2d').getImageData(0,0,mask.width,mask.height);
+      const od = tCtx.createImageData(mask.width, mask.height);
+      for(let i=0;i<md.data.length;i+=4){
+        const isFg = md.data[i] < 128;
+        od.data[i]=0; od.data[i+1]=0; od.data[i+2]=0;
+        od.data[i+3] = isFg ? 255 : 0;
+      }
+      tCtx.putImageData(od,0,0);
+      ctx.drawImage(tmpC, dx, dy, dw, dh);
+    }
+  }
+}
+
+function getExportBlob(scale = 1.0, quality = 0.95) {
+  return new Promise((resolve) => {
+    const source = state.croppedCanvas;
+    const { w: baseW, h: baseH } = getOutputPixels();
+
+    const w = Math.max(1, Math.round(baseW * scale));
+    const h = Math.max(1, Math.round(baseH * scale));
+
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+
+    if (state.fmt === 'jpg') {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+    } else {
+      ctx.clearRect(0, 0, w, h);
+    }
+
+    const padEl = document.getElementById('toggle-pad');
+    const pad = padEl ? padEl.checked : false;
+    const padPct = pad ? 0.05 : 0;
+    
+    const innerW = w * (1 - 2 * padPct);
+    const innerH = h * (1 - 2 * padPct);
+    const dx = w * padPct;
+    const dy = h * padPct;
+    const dw = innerW;
+    const dh = innerH;
+
+    if (state.mode === 'photo') {
+      ctx.drawImage(source, dx, dy, dw, dh);
+    } else {
+      if (state.processedContours && state.processedContours.length > 0 && state.vectorBounds) {
+        const { minX, minY, cropW, cropH } = state.vectorBounds;
+        
+        ctx.beginPath();
+        state.processedContours.forEach(pts => {
+          if (pts.length < 2) return;
+          const x0 = dx + ((pts[0][0] - minX) / cropW) * dw;
+          const y0 = dy + ((pts[0][1] - minY) / cropH) * dh;
+          ctx.moveTo(x0, y0);
+          for (let i = 1; i < pts.length; i++) {
+            const xi = dx + ((pts[i][0] - minX) / cropW) * dw;
+            const yi = dy + ((pts[i][1] - minY) / cropH) * dh;
+            ctx.lineTo(xi, yi);
+          }
+          ctx.closePath();
+        });
+        ctx.fillStyle = '#000000';
+        ctx.fill('evenodd');
+        
+        const strokeInput = document.getElementById('sl-weight');
+        const strokeW = strokeInput ? +strokeInput.value : 1;
+        if (strokeW > 0) {
+          ctx.lineWidth = strokeW * Math.min(dw / cropW, dh / cropH);
+          ctx.strokeStyle = '#000000';
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
+          ctx.stroke();
+        }
+      } else {
+        const mask = state.maskCanvas || source;
+        const tmpC = document.createElement('canvas');
+        tmpC.width = mask.width; tmpC.height = mask.height;
+        const tCtx = tmpC.getContext('2d');
+        const md = mask.getContext('2d').getImageData(0,0,mask.width,mask.height);
+        const od = tCtx.createImageData(mask.width, mask.height);
+        for(let i=0;i<md.data.length;i+=4){
+          const isFg = md.data[i] < 128;
+          od.data[i]=0; od.data[i+1]=0; od.data[i+2]=0;
+          od.data[i+3] = isFg ? 255 : 0;
+        }
+        tCtx.putImageData(od,0,0);
+        ctx.drawImage(tmpC, dx, dy, dw, dh);
+      }
+    }
+
+    const mime = state.fmt === 'jpg' ? 'image/jpeg' : 'image/png';
+    c.toBlob(blob => resolve(blob), mime, state.fmt === 'jpg' ? quality : undefined);
+  });
+}
+
+const outUnitEl = document.getElementById('out-unit');
+if (outUnitEl) {
+  outUnitEl.addEventListener('change', function(){
+    const dpiSel = document.getElementById('out-dpi');
+    if (dpiSel) {
+      dpiSel.style.display = this.value==='px' ? 'none' : 'inline-block';
+    }
+    refreshExportPreview();
+  });
+}
+
+const outWEl = document.getElementById('out-w');
+const outHEl = document.getElementById('out-h');
+if (outWEl) outWEl.addEventListener('input', onSizeInput);
+if (outHEl) outHEl.addEventListener('input', onSizeInput);
+
+const outDpiEl = document.getElementById('out-dpi');
+if (outDpiEl) outDpiEl.addEventListener('change', refreshExportPreview);
+
+const togglePadEl = document.getElementById('toggle-pad');
+if (togglePadEl) togglePadEl.addEventListener('change', refreshExportPreview);
+
+const toggleRatioEl = document.getElementById('toggle-keepratio');
+if (toggleRatioEl) toggleRatioEl.addEventListener('change', refreshExportPreview);
+
+const toggleKbLimitEl = document.getElementById('toggle-kb-limit');
+if (toggleKbLimitEl) {
+  toggleKbLimitEl.addEventListener('change', function() {
+    const kbWrap = document.getElementById('kb-inputs-wrapper');
+    if (kbWrap) kbWrap.style.display = this.checked ? 'flex' : 'none';
+  });
+}
+
+function onSizeInput(e) {
+  const ratioEl = document.getElementById('toggle-keepratio');
+  const keepRatio = ratioEl ? ratioEl.checked : true;
+  if(keepRatio && _aspectRatio) {
+    const wIn = document.getElementById('out-w');
+    const hIn = document.getElementById('out-h');
+    if (wIn && hIn) {
+      if(e.target.id==='out-w') {
+        hIn.value = Math.round(+e.target.value / _aspectRatio);
+      } else {
+        wIn.value = Math.round(+e.target.value * _aspectRatio);
+      }
+    }
+  }
+  refreshExportPreview();
+}
+
+function getOutputPixels() {
+  const unitEl = document.getElementById('out-unit');
+  const unit = unitEl ? unitEl.value : 'px';
+  const dpiEl = document.getElementById('out-dpi');
+  const dpi = dpiEl ? (+dpiEl.value || 300) : 300;
+  
+  const wIn = document.getElementById('out-w');
+  const hIn = document.getElementById('out-h');
+  let w = wIn ? +wIn.value : 400;
+  let h = hIn ? +hIn.value : 200;
+  
+  if(unit==='mm') { w=Math.round(w/25.4*dpi); h=Math.round(h/25.4*dpi); }
+  if(unit==='inch') { w=Math.round(w*dpi); h=Math.round(h*dpi); }
+  return {w, h};
+}
+
+// Format card toggles defensively wired
+document.querySelectorAll('.format-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.format-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    state.fmt = card.dataset.fmt;
+    refreshExportPreview();
+  });
+});
+
+listen('btn-preview-refresh', 'click', refreshExportPreview);
+listen('btn-download', 'click', downloadFile);
+
+async function downloadFile() {
+  const fmt = state.fmt;
+
+  if(fmt==='svg'){
+    if(!state.svgString){ toast('No SVG generated yet'); return; }
+    const blob = new Blob([state.svgString], {type:'image/svg+xml'});
+    triggerDownload(URL.createObjectURL(blob), 'signature.svg');
+    toast('✓ SVG downloaded');
+    return;
+  }
+
+  const limitEl = document.getElementById('toggle-kb-limit');
+  const useLimit = limitEl ? limitEl.checked : false;
+  if (!useLimit) {
+    const c = document.getElementById('canvas-export');
+    refreshExportPreview();
+    setTimeout(() => {
+      if (!c) return;
+      const mime = fmt==='jpg' ? 'image/jpeg' : 'image/png';
+      const quality = fmt==='jpg' ? 0.95 : undefined;
+      c.toBlob(blob => {
+        triggerDownload(URL.createObjectURL(blob), `output.${fmt}`);
+        toast(`✓ Downloaded (${(blob.size/1024).toFixed(1)} KB)`);
+      }, mime, quality);
+    }, 50);
+    return;
+  }
+
+  // KB optimization loop
+  const kbMinEl = document.getElementById('kb-min');
+  const kbMaxEl = document.getElementById('kb-max');
+  const minKB = kbMinEl ? (+kbMinEl.value || 10) : 10;
+  const maxKB = kbMaxEl ? (+kbMaxEl.value || 20) : 20;
+  const targetMid = (minKB + maxKB) / 2;
+
+  toast('⚡ Scaling quality & dimensions...');
+
+  // Set binary search boundary limits on monotonic variable 't'
+  let low = 0.0;
+  let high = 1.0;
+  let bestBlob = null;
+  let bestDiff = Infinity;
+  const iterations = 15; // 15 steps guarantees highly precise convergence
+
+  for (let i = 0; i < iterations; i++) {
+    const t = (low + high) / 2;
+    let scale, quality;
+
+    if (fmt === 'png') {
+      // PNG varies size strictly through pixel scaling (adding/removing pixels)
+      scale = 0.05 + t * 3.95; // Range: 0.05x to 4.0x requested canvas resolution
+      quality = undefined;
+    } else {
+      // JPG varies quality and pixel dimensions in lockstep
+      scale = 0.1 + t * 2.9;   // Range: 0.1x to 3.0x requested canvas resolution
+      quality = 0.15 + t * 0.83; // Range: 0.15 to 0.98 compression quality
+    }
+
+    const blob = await getExportBlob(scale, quality);
+    const sizeKB = blob.size / 1024;
+
+    // Check if within specified size range
+    if (sizeKB >= minKB && sizeKB <= maxKB) {
+      bestBlob = blob;
+      break; // Exit early on target hit
+    }
+
+    // Keep track of the absolute closest candidate if exact bounds aren't achievable
+    const diff = Math.abs(sizeKB - targetMid);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestBlob = blob;
+    }
+
+    if (sizeKB > maxKB) {
+      high = t; // Exceeds target, search smaller configurations
+    } else {
+      low = t;  // Under target, search larger configurations
+    }
+  }
+
+  if (bestBlob) {
+    const finalSizeKB = (bestBlob.size / 1024).toFixed(1);
+    triggerDownload(URL.createObjectURL(bestBlob), `output.${fmt}`);
+    toast(`✓ Target size achieved (${finalSizeKB} KB)`);
+  } else {
+    toast('⚠️ Could not achieve target size. Try widening the KB range.');
+  }
+}
+
+function triggerDownload(url, name) {
+  const a = document.createElement('a');
+  a.href=url; a.download=name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+listen('btn-back-3', 'click', () => {
+  if (state.mode === 'photo') {
+    goTo(1); // Go back directly to crop step in Photo Mode
+  } else {
+    goTo(3); // Go back to vector step in Signature Mode
+  }
+});
+</script>
+</body>
+</html>
